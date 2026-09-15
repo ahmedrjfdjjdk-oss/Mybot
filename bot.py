@@ -15,9 +15,9 @@ import io
 BOT_TOKEN = "8667829421:AAEq2fYIqOJ_HrsEHnX5ByqkARlCj0_VKFc"
 OWNER_ID = 7670426534  # آيدي حسابك الأساسي (المالك)
 
-# مفاتيح الفحص المخصص (Sightengine API)
-SIGHTENGINE_USER = "YOUR_API_USER"       # ضع هنا الـ API User الخاص بك
-SIGHTENGINE_SECRET = "YOUR_API_SECRET"   # ضع هنا الـ API Secret الخاص بك
+# مفاتيح الفحص المخصص (Sightengine API) - تم إضافتها بدقة
+SIGHTENGINE_USER = "69518445"                     # آيدي المستخدم الخاص بك
+SIGHTENGINE_SECRET = "brsUxCqbzAbgKpm4SGwDEnGvL8Zp3ZTL"   # المفتاح السري الخاص بك
 
 SETTINGS_FILE = "channel_ultra_settings.json"
 
@@ -79,7 +79,7 @@ def save_settings(settings):
         json.dump(settings, f, indent=4)
 
 config = load_settings()
-print("[-] تم تشغيل البوت بنجاح وبأقصى درجات الحماية والصرامة...")
+print("[-] تم تشغيل البوت بنجاح وبأقصى درجات الحماية والصرامة العالية...")
 
 def is_admin(user_id):
     return user_id == OWNER_ID or user_id in config.get("admins", [])
@@ -145,7 +145,7 @@ def unpunish_user_in_chat(chat_id, user_id):
         pass
     return False
 
-# ==================== [ الفحص الصارم والدقيق عبر Sightengine ] ====================
+# ==================== [ نظام الفحص والحماية الصارم جداً والمكثف ] ====================
 def analyze_media_with_sightengine(file_bytes):
     try:
         image = Image.open(io.BytesIO(file_bytes))
@@ -156,7 +156,6 @@ def analyze_media_with_sightengine(file_bytes):
         image.save(output_io, format="JPEG", quality=95)
         processed_bytes = output_io.getvalue()
         
-        # تفعيل نماذج العري المتقدم والاستغلال (nudity-2.0, wad, scam)
         params = {
             'models': 'nudity-2.0,wad,scam',
             'api_user': SIGHTENGINE_USER,
@@ -171,17 +170,16 @@ def analyze_media_with_sightengine(file_bytes):
             res_data = response.json()
             if res_data.get('status') == 'success':
                 nudity = res_data.get('nudity', {})
-                raw_sexual = nudity.get('raw', 0.0)          # العري الصريح
-                partial_sexual = nudity.get('partial', 0.0)  # العري الجزئي أو المثير
+                raw_sexual = nudity.get('raw', 0.0)          
+                partial_sexual = nudity.get('partial', 0.0)  
                 
                 wad = res_data.get('wad', {})
-                wad_score = wad.get('prob', 0.0)             # محتوى استغلال الأطفال أو المخالفات الخطيرة
+                wad_score = wad.get('prob', 0.0)             
 
-                # شروط صارمة جداً تمنع الأخطاء وتحذف الإباحية بدقة تامة
-                if raw_sexual >= 0.65 or partial_sexual >= 0.75 or wad_score >= 0.60:
+                if raw_sexual >= 0.35 or partial_sexual >= 0.45 or wad_score >= 0.40:
                     return True
     except Exception as e:
-        print(f"[!] خطأ في الفحص الصارم: {e}")
+        print(f"[!] خطأ في محرك الفحص الصارم: {e}")
     return False
 
 def process_channel_message(message):
@@ -214,7 +212,6 @@ def process_channel_message(message):
     config["total_scanned"] += 1
     save_settings(config)
 
-    # القائمة السوداء اليدوية
     if is_custom_violated:
         config["total_deleted"] += 1
         save_settings(config)
@@ -222,7 +219,7 @@ def process_channel_message(message):
             bot.delete_message(chat_id, message_id)
             chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
             alert_text = (
-                f"🚫 <b>تم حذف محتوى مخالف (من القائمة السوداء)</b>\n\n"
+                f"🚫 <b>تم حذف محتوى مخالف (من القائمة السوداء الفولاذية)</b>\n\n"
                 f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
                 f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
                 f"🏷️ <b>نوع المحتوى:</b> {media_type_name}"
@@ -238,7 +235,7 @@ def process_channel_message(message):
         
         is_violating = False
         if message.video or message.animation:
-            if analyze_media_with_sightengine(downloaded_file[:1000000]):
+            if analyze_media_with_sightengine(downloaded_file[:1500000]):
                 is_violating = True
         else:
             if analyze_media_with_sightengine(downloaded_file):
@@ -252,11 +249,11 @@ def process_channel_message(message):
             try:
                 bot.delete_message(chat_id, message_id)
                 alert_text = (
-                    f"🚫 <b>تم حذف محتوى إباحي مؤكد وصارم</b>\n\n"
+                    f"🚫 <b>تم رصد وحذف محتوى إباحي/مخالف بصرامة شديدة</b>\n\n"
                     f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
                     f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
                     f"🏷️ <b>نوع المحتوى:</b> {media_type_name}\n"
-                    f"📊 <b>إجمالي المحذوفات:</b> {config['total_deleted']}"
+                    f"📊 <b>إجمالي المحذوفات الصارمة:</b> {config['total_deleted']}"
                 )
                 notify_admins(alert_text)
             except:
@@ -270,7 +267,6 @@ def check_message_text_and_spam(message):
     message_id = message.message_id
     message_text = message.text or message.caption or ""
 
-    # 1. الكلمات المحظورة
     if message_text:
         for word in config["banned_words"]:
             if word.lower() in message_text.lower():
@@ -293,7 +289,6 @@ def check_message_text_and_spam(message):
                 except:
                     return True
 
-    # 2. منع السبام
     if config["anti_spam"]:
         sender_id = message.from_user.id if message.from_user else chat_id
         current_time = time.time()
@@ -325,7 +320,7 @@ def check_message_text_and_spam(message):
                 return True
     return False
 
-# ==================== [ لوحة التحكم الكاملة ] ====================
+# ==================== [ لوحة التحكم الفولاذية الكاملة ] ====================
 def generate_markup():
     kb = telebot.types.InlineKeyboardMarkup()
     status_text = "🟢 مفعلة" if config["protection_status"] else "🔴 معطلة"
@@ -679,7 +674,7 @@ def on_edited_group_message(message):
 if __name__ == "__main__":
     while True:
         try:
-            print("[*] تم تشغيل البوت بنجاح تام وبأعلى معايير الحماية والصرامة...")
+            print("[*] تم تشغيل البوت بنجاح تام وبأعلى معايير الحماية والصرامة العالية...")
             bot.infinity_polling(interval=1, timeout=60, long_polling_timeout=60, skip_pending=True)
         except Exception as err:
             print(f"[!] خطأ بالاتصال: {err}")
