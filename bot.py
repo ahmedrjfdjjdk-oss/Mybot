@@ -20,7 +20,7 @@ BOT_TOKEN = "8667829421:AAEq2fYIqOJ_HrsEHnX5ByqkARlCj0_VKFc"
 OWNER_ID = 7670426534  # آيدي حسابك الأساسي (المالك)
 
 # مفتاح الـ api للذكاء الاصطناعي
-GEMINI_API_KEY = "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"  
+GEMINI_API_KEY = "AQ.Ab8RN6LPpHBip67csDjiozHfiidrpfTyzZQ4q6WN4gh7gdoDhQ"  
 
 SETTINGS_FILE = "channel_ultra_settings.json"
 
