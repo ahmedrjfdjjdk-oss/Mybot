@@ -51,7 +51,7 @@ def load_settings():
                     "total_deleted": 0,
                     "channels_monitored": [],
                     "custom_violations": [],
-                    "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بأقصى درجات التركيز لحذف المحتوى الإباحي بدقة مطلقة.",
+                    "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بأقصى درجات التركيز لحذف المحتوى الإباحي والسبام بدقة.",
                     "welcome_file_id": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop",
                     "welcome_type": "photo"
                 }
@@ -73,7 +73,7 @@ def load_settings():
         "total_deleted": 0,
         "channels_monitored": [],
         "custom_violations": [],
-        "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بأقصى درجات التركيز لحذف المحتوى الإباحي بدقة مطلقة.",
+        "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بأقصى درجات التركيز لحذف المحتوى الإباحي والسبام بدقة.",
         "welcome_file_id": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop",
         "welcome_type": "photo"
     }
@@ -185,7 +185,6 @@ def analyze_media(file_bytes, mime_type="image/jpeg"):
         encoded_string = base64.b64encode(file_bytes).decode("utf-8")
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
         
-        # [تعديل صارم جداً لحذف أي محتوى إباحي أو استغلالي بدون استثناء]
         prompt = (
             "You are an absolute, zero-tolerance AI safety and child protection moderation expert. "
             "Examine this image with extreme scrutiny. Does it contain ANY form of pornography, adult explicit content, "
@@ -278,6 +277,7 @@ def check_message_text_and_spam(message):
     message_id = message.message_id
     message_text = message.text or message.caption or ""
 
+    # 1. فحص الكلمات المحظورة وحذفها مع سحب الصلاحية
     if message_text:
         for word in config["banned_words"]:
             if word.lower() in message_text.lower():
@@ -301,6 +301,7 @@ def check_message_text_and_spam(message):
                 except:
                     return True
 
+    # 2. فحص ومنع السبام (حذف جميع رسائل السبام وسحب الصلاحية عند تجاوز الحد المسموح)
     if config["anti_spam"]:
         sender_id = message.from_user.id if message.from_user else chat_id
         current_time = time.time()
@@ -311,15 +312,22 @@ def check_message_text_and_spam(message):
         user_messages[sender_id].append(current_time)
         user_messages[sender_id] = [t for t in user_messages[sender_id] if current_time - t < config["spam_window"]]
 
+        # حذف رسالة السبام الحالية دائماً لتفريغ القناة
+        try:
+            bot.delete_message(chat_id, message_id)
+        except:
+            pass
+
+        # إذا تجاوز الشخص الحد المسموح للسبام المحدد في لوحة التحكم، يتم سحب صلاحية النشر منه
         if len(user_messages[sender_id]) > config["spam_limit"]:
             try:
                 chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
                 punished_status = ""
                 if punish_user_only(chat_id, user_id):
-                    punished_status = "\n⚖️ <b>الإجراء:</b> تم سحب صلاحية النشر بسبب السبام!"
+                    punished_status = f"\n⚖️ <b>الإجراء:</b> تم سحب صلاحية النشر لتجاوز الحد ({config['spam_limit']} رسائل)!"
 
                 alert_text = (
-                    f"⚠️ <b>رصد حالة سبام من عضو</b>\n\n"
+                    f"⚠️ <b>رصد وتجاوز حد السبام من عضو</b>\n\n"
                     f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
                     f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)"
                     f"{punished_status}"
@@ -348,8 +356,11 @@ def generate_markup():
         telebot.types.InlineKeyboardButton(f"✏️ منع التعديل: {edit_text} ✏️", callback_data="toggle_edit")
     )
     kb.row(
+        telebot.types.InlineKeyboardButton(f"🔢 حد رسائل السبام: ({config['spam_limit']})", callback_data="set_spam_limit_prompt")
+    )
+    kb.row(
         telebot.types.InlineKeyboardButton("⚙️ تعديل نص اللوحة", callback_data="edit_panel_text"),
-        telebot.types.InlineKeyboardButton("🖼️ تغيير صورة/ملصق الترحيب", callback_data="info_welcome")
+        telebot.types.InlineKeyboardButton("🖼️ تغيير صورة الترحيب", callback_data="info_welcome")
     )
     kb.row(
         telebot.types.InlineKeyboardButton("👤 رفع شخص بالآيدي", callback_data="unpunish_by_id_prompt"),
@@ -512,6 +523,11 @@ def handle_callbacks(call):
     elif call.data == "toggle_edit":
         config["anti_edit"] = not config["anti_edit"]
         action_performed = True
+    elif call.data == "set_spam_limit_prompt":
+        sent_msg = bot.send_message(call.message.chat.id, "🔢 أرسل الآن عدد الرسائل المسموحة للسبام قبل سحب الصلاحية (مثال: `3` أو `5`):", parse_mode="MARKDOWN")
+        bot.register_next_step_handler(sent_msg, process_spam_limit_input)
+        bot.answer_callback_query(call.id)
+        return
     elif call.data == "edit_panel_text":
         sent_msg = bot.send_message(call.message.chat.id, "✏️ أرسل الآن النص الجديد الذي تريد ظهوره في لوحة التحكم:")
         bot.register_next_step_handler(sent_msg, process_panel_text_input)
@@ -588,6 +604,19 @@ def handle_callbacks(call):
             bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=generate_markup())
         except: 
             pass
+
+def process_spam_limit_input(message):
+    if not is_admin(message.from_user.id): return
+    try:
+        limit = int(message.text.strip())
+        if limit > 0:
+            config["spam_limit"] = limit
+            save_settings(config)
+            bot.reply_to(message, f"✅ تم تحديث حد رسائل السبام بنجاح إلى: `{limit}` رسائل.")
+        else:
+            bot.reply_to(message, "❌ يرجى إرسال رقم أكبر من الصفر.")
+    except:
+        bot.reply_to(message, "❌ يرجى إرسال رقم صحيح.")
 
 def process_panel_text_input(message):
     if not is_admin(message.from_user.id): return
