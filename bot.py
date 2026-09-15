@@ -51,7 +51,7 @@ def load_settings():
                     "total_deleted": 0,
                     "channels_monitored": [],
                     "custom_violations": [],
-                    "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بأقصى درجات التركيز لحذف المحتوى الإباحي والسبام بدقة.",
+                    "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بدقة عالية لحذف المحتوى الإباحي والسبام فقط.",
                     "welcome_file_id": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop",
                     "welcome_type": "photo"
                 }
@@ -73,7 +73,7 @@ def load_settings():
         "total_deleted": 0,
         "channels_monitored": [],
         "custom_violations": [],
-        "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بأقصى درجات التركيز لحذف المحتوى الإباحي والسبام بدقة.",
+        "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بدقة عالية لحذف المحتوى الإباحي والسبام فقط.",
         "welcome_file_id": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop",
         "welcome_type": "photo"
     }
@@ -83,7 +83,7 @@ def save_settings(settings):
         json.dump(settings, f, indent=4)
 
 config = load_settings()
-print("[-] تم تشغيل النظام الفولاذي الشامل بنجاح...")
+print("[-] تم تشغيل النظام الذكي المحدث بنجاح...")
 
 def is_admin(user_id):
     return user_id == OWNER_ID or user_id in config.get("admins", [])
@@ -149,48 +149,30 @@ def unpunish_user_in_chat(chat_id, user_id):
         print(f"[!] خطأ رفع الصلاحية: {e}")
     return False
 
-# ==================== [ فحص الذكاء الاصطناعي (أقصى درجات الحماية والصرامة المطلقة) ] ====================
+# ==================== [ فحص الذكاء الاصطناعي (دقيق للصور المخالفة حصراً) ] ====================
 def normalize_image(file_bytes):
     try:
         img = Image.open(io.BytesIO(file_bytes))
         if img.mode != 'RGB':
             img = img.convert('RGB')
-        img = img.resize((768, 768), Image.Resampling.LANCZOS)
+        img = img.resize((512, 512), Image.Resampling.LANCZOS)
         output = io.BytesIO()
-        img.save(output, format="JPEG", quality=95)
+        img.save(output, format="JPEG", quality=90)
         return output.getvalue()
     except:
         return file_bytes
-
-def local_backup_scan(file_bytes):
-    try:
-        nparr = np.frombuffer(file_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if img is None:
-            return False
-        height, width, _ = img.shape
-        total_pixels = width * height
-        img_ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-        mask = cv2.inRange(img_ycrcb, np.array([0, 133, 77]), np.array([255, 177, 127]))
-        explicit_pixels = cv2.countNonZero(mask)
-        ratio = (explicit_pixels / total_pixels) * 100
-        if ratio > 35.0:
-            return True
-    except:
-        pass
-    return False
 
 def analyze_media(file_bytes, mime_type="image/jpeg"):
     try:
         encoded_string = base64.b64encode(file_bytes).decode("utf-8")
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
         
+        # توجيه دقيق يضمن عدم حذف الصور الطبيعية والعادية، ويركز فقط على الإباحي الفاضح واستغلال الأطفال
         prompt = (
-            "You are an absolute, zero-tolerance AI safety and child protection moderation expert. "
-            "Examine this image with extreme scrutiny. Does it contain ANY form of pornography, adult explicit content, "
-            "nudity, partial nudity, suggestive poses, lingerie, or ANY form of child sexual abuse material (CSAM) or child exploitation? "
-            "If there is even the slightest hint, suggestion, or explicit content of any kind, you MUST reply with 'true'. "
-            "If and only if the image is 100% completely safe, ordinary, and innocent, reply 'false'. Be extremely strict."
+            "You are a strict content moderation AI. Look at this image. "
+            "Does it contain explicit pornography, hardcore adult sexual acts, explicit genital exposure, or child sexual abuse material (CSAM)? "
+            "Answer strictly with 'true' ONLY if it contains explicit pornography or explicit adult/child exploitation content. "
+            "If it is an ordinary photo, selfie, normal artwork, anime, sticker, meme, landscape, or anything else safe and non-pornographic, you MUST answer with 'false'."
         )
         
         payload = {
@@ -208,9 +190,8 @@ def analyze_media(file_bytes, mime_type="image/jpeg"):
             if "true" in raw_text:
                 return True
     except:
-        return local_backup_scan(file_bytes)
-        
-    return local_backup_scan(file_bytes)
+        pass
+    return False
 
 def process_channel_message(message):
     global config
@@ -245,29 +226,49 @@ def process_channel_message(message):
     config["total_scanned"] += 1
     save_settings(config)
 
-    try:
-        file_info = bot.get_file(file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        processed_file = normalize_image(downloaded_file)
-        
-        if is_custom_violated or analyze_media(processed_file, mime_type=mime_type):
-            config["total_deleted"] += 1
-            save_settings(config)
-            
+    # إذا كانت القائمة السوداء اليدوية تحتوي عليه، احذفه فوراً
+    if is_custom_violated:
+        config["total_deleted"] += 1
+        save_settings(config)
+        try:
+            bot.delete_message(chat_id, message_id)
             chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
+            alert_text = (
+                f"🚫 <b>تم حذف محتوى مخالف (من القائمة السوداء)</b>\n\n"
+                f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
+                f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
+                f"🏷️ <b>نوع المحتوى:</b> {media_type_name}"
+            )
+            notify_admins(alert_text)
+        except:
+            pass
+        return
+
+    # فحص الوسائط عبر الذكاء الاصطناعي (الفيديوهات والملصقات غير الداعمة للتحميل المباشر يتم تخطيها بأمان لكي لا تحذف العادية)
+    try:
+        if message.photo or message.sticker or message.animation:
+            file_info = bot.get_file(file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            processed_file = normalize_image(downloaded_file)
             
-            try:
-                bot.delete_message(chat_id, message_id)
-                alert_text = (
-                    f"🚫 <b>تم حذف محتوى إباحي أو مخالف فوراً</b>\n\n"
-                    f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
-                    f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
-                    f"🏷️ <b>نوع المحتوى:</b> {media_type_name}\n"
-                    f"📊 <b>إجمالي المحذوفات:</b> {config['total_deleted']}"
-                )
-                notify_admins(alert_text)
-            except:
-                pass
+            if analyze_media(processed_file, mime_type=mime_type):
+                config["total_deleted"] += 1
+                save_settings(config)
+                
+                chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
+                
+                try:
+                    bot.delete_message(chat_id, message_id)
+                    alert_text = (
+                        f"🚫 <b>تم حذف محتوى إباحي أو مخالف بالذكاء الاصطناعي</b>\n\n"
+                        f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
+                        f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
+                        f"🏷️ <b>نوع المحتوى:</b> {media_type_name}\n"
+                        f"📊 <b>إجمالي المحذوفات:</b> {config['total_deleted']}"
+                    )
+                    notify_admins(alert_text)
+                except:
+                    pass
     except:
         pass
 
@@ -277,7 +278,7 @@ def check_message_text_and_spam(message):
     message_id = message.message_id
     message_text = message.text or message.caption or ""
 
-    # 1. فحص الكلمات المحظورة وحذفها مع سحب الصلاحية
+    # 1. فحص الكلمات المحظورة
     if message_text:
         for word in config["banned_words"]:
             if word.lower() in message_text.lower():
@@ -301,7 +302,7 @@ def check_message_text_and_spam(message):
                 except:
                     return True
 
-    # 2. فحص ومنع السبام (حذف جميع رسائل السبام وسحب الصلاحية عند تجاوز الحد المسموح)
+    # 2. فحص ومنع السبام
     if config["anti_spam"]:
         sender_id = message.from_user.id if message.from_user else chat_id
         current_time = time.time()
@@ -312,22 +313,17 @@ def check_message_text_and_spam(message):
         user_messages[sender_id].append(current_time)
         user_messages[sender_id] = [t for t in user_messages[sender_id] if current_time - t < config["spam_window"]]
 
-        # حذف رسالة السبام الحالية دائماً لتفريغ القناة
-        try:
-            bot.delete_message(chat_id, message_id)
-        except:
-            pass
-
-        # إذا تجاوز الشخص الحد المسموح للسبام المحدد في لوحة التحكم، يتم سحب صلاحية النشر منه
+        # إذا تجاوز الشخص عدد رسائل السبام المحددة في لوحة التحكم، يتم حذف رسالته وسحب الصلاحية
         if len(user_messages[sender_id]) > config["spam_limit"]:
             try:
+                bot.delete_message(chat_id, message_id)
                 chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
                 punished_status = ""
                 if punish_user_only(chat_id, user_id):
                     punished_status = f"\n⚖️ <b>الإجراء:</b> تم سحب صلاحية النشر لتجاوز الحد ({config['spam_limit']} رسائل)!"
 
                 alert_text = (
-                    f"⚠️ <b>رصد وتجاوز حد السبام من عضو</b>\n\n"
+                    f"⚠️ <b>رصد وتجاوز حد السبام وحذف الرسالة</b>\n\n"
                     f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
                     f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)"
                     f"{punished_status}"
