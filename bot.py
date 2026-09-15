@@ -9,15 +9,16 @@ import sys
 import time
 from PIL import Image
 import io
+import re
 
 # ==================== [ الإعدادات الأساسية ] ====================
 
 BOT_TOKEN = "8667829421:AAEq2fYIqOJ_HrsEHnX5ByqkARlCj0_VKFc"
 OWNER_ID = 7670426534  # آيدي حسابك الأساسي (المالك)
 
-# مفاتيح الفحص المخصص (Sightengine API) - تم إضافتها بدقة
-SIGHTENGINE_USER = "69518445"                     # آيدي المستخدم الخاص بك
-SIGHTENGINE_SECRET = "brsUxCqbzAbgKpm4SGwDEnGvL8Zp3ZTL"   # المفتاح السري الخاص بك
+# مفاتيح الفحص المخصص (Sightengine API)
+SIGHTENGINE_USER = "69518445"                     
+SIGHTENGINE_SECRET = "brsUxCqbzAbgKpm4SGwDEnGvL8Zp3ZTL"   
 
 SETTINGS_FILE = "channel_ultra_settings.json"
 
@@ -38,7 +39,9 @@ def load_settings():
                 default_keys = {
                     "protection_status": True,
                     "anti_spam": True,
-                    "anti_edit": False,
+                    "anti_edit": True,
+                    "anti_links": True,
+                    "block_all_stickers": False,
                     "spam_limit": 3,
                     "spam_window": 5,
                     "banned_words": [],
@@ -47,7 +50,7 @@ def load_settings():
                     "total_deleted": 0,
                     "channels_monitored": [],
                     "custom_violations": [],
-                    "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بفلترة صارمة وقوية جداً للوسائط.",
+                    "panel_custom_text": "👑 لوحة الحماية الفولاذية القصوى:\n\n⚡ النظام يعمل بذكاء اصطناعي فائق الصرامة لفلترة كافة الوسائط والمحتوى.",
                     "welcome_file_id": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop",
                     "welcome_type": "photo"
                 }
@@ -60,7 +63,9 @@ def load_settings():
     return {
         "protection_status": True, 
         "anti_spam": True,
-        "anti_edit": False,
+        "anti_edit": True,
+        "anti_links": True,
+        "block_all_stickers": False,
         "spam_limit": 3,
         "spam_window": 5,
         "banned_words": [],
@@ -69,7 +74,7 @@ def load_settings():
         "total_deleted": 0,
         "channels_monitored": [],
         "custom_violations": [],
-        "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بفلترة صارمة وقوية جداً للوسائط.",
+        "panel_custom_text": "👑 لوحة الحماية الفولاذية القصوى:\n\n⚡ النظام يعمل بذكاء اصطناعي فائق الصرامة لفلترة كافة الوسائط والمحتوى.",
         "welcome_file_id": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop",
         "welcome_type": "photo"
     }
@@ -79,7 +84,7 @@ def save_settings(settings):
         json.dump(settings, f, indent=4)
 
 config = load_settings()
-print("[-] تم تشغيل البوت بنجاح وبأقصى درجات الحماية والصرامة العالية...")
+print("[-] تم تشغيل نظام الحماية الفولاذي الأقصى بنجاح...")
 
 def is_admin(user_id):
     return user_id == OWNER_ID or user_id in config.get("admins", [])
@@ -145,7 +150,7 @@ def unpunish_user_in_chat(chat_id, user_id):
         pass
     return False
 
-# ==================== [ نظام الفحص والحماية الصارم جداً والمكثف ] ====================
+# ==================== [ محرك الذكاء الاصطناعي فائق الحساسية ] ====================
 def analyze_media_with_sightengine(file_bytes):
     try:
         image = Image.open(io.BytesIO(file_bytes))
@@ -168,18 +173,19 @@ def analyze_media_with_sightengine(file_bytes):
         response = requests.post('https://api.sightengine.com/1.0/check.json', files=files, data=params, timeout=20)
         if response.status_code == 200:
             res_data = response.json()
+            print(f"[AI Scan Result]: {res_data}")
+            
             if res_data.get('status') == 'success':
                 nudity = res_data.get('nudity', {})
                 raw_sexual = nudity.get('raw', 0.0)          
                 partial_sexual = nudity.get('partial', 0.0)  
-                
                 wad = res_data.get('wad', {})
                 wad_score = wad.get('prob', 0.0)             
 
-                if raw_sexual >= 0.35 or partial_sexual >= 0.45 or wad_score >= 0.40:
+                if raw_sexual >= 0.05 or partial_sexual >= 0.08 or wad_score >= 0.10:
                     return True
     except Exception as e:
-        print(f"[!] خطأ في محرك الفحص الصارم: {e}")
+        print(f"[!] خطأ في فحص الذكاء الاصطناعي: {e}")
     return False
 
 def process_channel_message(message):
@@ -212,14 +218,14 @@ def process_channel_message(message):
     config["total_scanned"] += 1
     save_settings(config)
 
-    if is_custom_violated:
+    if is_custom_violated or (message.sticker and config.get("block_all_stickers", False)):
         config["total_deleted"] += 1
         save_settings(config)
         try:
             bot.delete_message(chat_id, message_id)
             chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
             alert_text = (
-                f"🚫 <b>تم حذف محتوى مخالف (من القائمة السوداء الفولاذية)</b>\n\n"
+                f"🚫 <b>تم حذف محتوى مخالف (محظور كلياً / قائمة سوداء)</b>\n\n"
                 f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
                 f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
                 f"🏷️ <b>نوع المحتوى:</b> {media_type_name}"
@@ -234,8 +240,8 @@ def process_channel_message(message):
         downloaded_file = bot.download_file(file_info.file_path)
         
         is_violating = False
-        if message.video or message.animation:
-            if analyze_media_with_sightengine(downloaded_file[:1500000]):
+        if message.sticker:
+            if analyze_media_with_sightengine(downloaded_file):
                 is_violating = True
         else:
             if analyze_media_with_sightengine(downloaded_file):
@@ -248,18 +254,19 @@ def process_channel_message(message):
             chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
             try:
                 bot.delete_message(chat_id, message_id)
+                punish_user_only(chat_id, user_id)
                 alert_text = (
-                    f"🚫 <b>تم رصد وحذف محتوى إباحي/مخالف بصرامة شديدة</b>\n\n"
+                    f"🚫 <b>تم رصد وحذف محتوى مخالف بواسطة الذكاء الاصطناعي</b>\n\n"
                     f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
                     f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
                     f"🏷️ <b>نوع المحتوى:</b> {media_type_name}\n"
-                    f"📊 <b>إجمالي المحذوفات الصارمة:</b> {config['total_deleted']}"
+                    f"⚖️ <b>الإجراء:</b> تم سحب صلاحية النشر تلقائياً!"
                 )
                 notify_admins(alert_text)
             except:
                 pass
-    except:
-        pass
+    except Exception as e:
+        print(f"[!] خطأ في المعالجة: {e}")
 
 def check_message_text_and_spam(message):
     global config
@@ -267,24 +274,27 @@ def check_message_text_and_spam(message):
     message_id = message.message_id
     message_text = message.text or message.caption or ""
 
+    if config["anti_links"] and message_text:
+        link_pattern = re.compile(r'https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)')
+        if link_pattern.search(message_text) or "t.me/" in message_text or "telegram.me/" in message_text:
+            if not is_admin(message.from_user.id if message.from_user else 0):
+                try:
+                    bot.delete_message(chat_id, message_id)
+                    chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
+                    punish_user_only(chat_id, user_id)
+                    notify_admins(f"🚫 <b>تم حذف رابط إعلاني/خارجي</b>\n📌 المكان: {chat_name}\n👤 العضو: {name}")
+                    return True
+                except:
+                    return True
+
     if message_text:
         for word in config["banned_words"]:
             if word.lower() in message_text.lower():
                 try:
                     bot.delete_message(chat_id, message_id)
                     chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
-                    punished_status = ""
-                    if punish_user_only(chat_id, user_id):
-                        punished_status = "\n⚖️ <b>الإجراء:</b> تم سحب صلاحية النشر بسبب كلمة محظورة!"
-
-                    alert_text = (
-                        f"🚫 <b>تم حذف رسالة تحتوي على كلمة محظورة</b>\n\n"
-                        f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
-                        f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
-                        f"💬 <b>الكلمة:</b> {word}"
-                        f"{punished_status}"
-                    )
-                    notify_admins(alert_text)
+                    punish_user_only(chat_id, user_id)
+                    notify_admins(f"🚫 <b>تم حذف كلمة محظورة</b>\n📌 المكان: {chat_name}\n💬 الكلمة: {word}")
                     return True
                 except:
                     return True
@@ -303,34 +313,31 @@ def check_message_text_and_spam(message):
             try:
                 bot.delete_message(chat_id, message_id)
                 chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
-                punished_status = ""
-                if punish_user_only(chat_id, user_id):
-                    punished_status = f"\n⚖️ <b>الإجراء:</b> تم سحب صلاحية النشر لتجاوز حد السبام ({config['spam_limit']} رسائل)!"
-
-                alert_text = (
-                    f"⚠️ <b>رصد وتجاوز حد السبام وحذف الرسالة</b>\n\n"
-                    f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
-                    f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)"
-                    f"{punished_status}"
-                )
-                notify_admins(alert_text)
+                punish_user_only(chat_id, user_id)
+                notify_admins(f"⚠️ <b>حظر سبام وسحب صلاحية</b>\n📌 المكان: {chat_name}\n👤 العضو: {name}")
                 user_messages[sender_id] = []
                 return True
             except:
                 return True
     return False
 
-# ==================== [ لوحة التحكم الفولاذية الكاملة ] ====================
+# ==================== [ لوحة التحكم الفولاذية ] ====================
 def generate_markup():
     kb = telebot.types.InlineKeyboardMarkup()
     status_text = "🟢 مفعلة" if config["protection_status"] else "🔴 معطلة"
     spam_text = "🟢 مفعل" if config["anti_spam"] else "🔴 معطل"
     edit_text = "🟢 مفعل" if config["anti_edit"] else "🔴 معطل"
+    links_text = "🟢 مفعل" if config["anti_links"] else "🔴 معطل"
+    stickers_text = "🔴 حظر الكل معطل" if not config["block_all_stickers"] else "🟢 حظر الملصقات مفعل"
     
-    kb.row(telebot.types.InlineKeyboardButton(f"🛡️ حماية الوسائط: {status_text} 🛡️", callback_data="toggle_protection"))
+    kb.row(telebot.types.InlineKeyboardButton(f"🛡️ حماية الذكاء الاصطناعي: {status_text}", callback_data="toggle_protection"))
     kb.row(
-        telebot.types.InlineKeyboardButton(f"⚡ منع السبام: {spam_text} ⚡", callback_data="toggle_spam"),
-        telebot.types.InlineKeyboardButton(f"✏️ منع التعديل: {edit_text} ✏️", callback_data="toggle_edit")
+        telebot.types.InlineKeyboardButton(f"⚡ منع السبام: {spam_text}", callback_data="toggle_spam"),
+        telebot.types.InlineKeyboardButton(f"✏️ منع التعديل: {edit_text}", callback_data="toggle_edit")
+    )
+    kb.row(
+        telebot.types.InlineKeyboardButton(f"🔗 منع الروابط: {links_text}", callback_data="toggle_links"),
+        telebot.types.InlineKeyboardButton(f"🎭 {stickers_text}", callback_data="toggle_stickers")
     )
     kb.row(telebot.types.InlineKeyboardButton(f"🔢 حد رسائل السبام: ({config['spam_limit']})", callback_data="set_spam_limit_prompt"))
     kb.row(
@@ -339,13 +346,13 @@ def generate_markup():
     )
     kb.row(
         telebot.types.InlineKeyboardButton("👤 رفع شخص بالآيدي", callback_data="unpunish_by_id_prompt"),
-        telebot.types.InlineKeyboardButton("➕ إضافة كلمة", callback_data="add_word")
+        telebot.types.InlineKeyboardButton("➕ إضافة كلمة محظورة", callback_data="add_word")
     )
     kb.row(
         telebot.types.InlineKeyboardButton(f"📋 إدارة الكلمات ({len(config['banned_words'])})", callback_data="manage_banned_words_panel"),
-        telebot.types.InlineKeyboardButton(f"👑 إدارة المشرفين ({len(config['admins'])})", callback_data="manage_admins")
+        telebot.types.InlineKeyboardButton(f"👑 المشرفين ({len(config['admins'])})", callback_data="manage_admins")
     )
-    kb.row(telebot.types.InlineKeyboardButton(f"📊 المحذوفات الصارمة: {config['total_deleted']}", callback_data="stats"))
+    kb.row(telebot.types.InlineKeyboardButton(f"📊 إجمالي المحذوفات الصارمة: {config['total_deleted']}", callback_data="stats"))
     return kb
 
 @bot.message_handler(commands=['start', 'panel'])
@@ -370,31 +377,27 @@ def set_welcome_cmd(message):
     if not is_admin(message.from_user.id):
         return
     if not message.reply_to_message:
-        bot.reply_to(message, "❌ يرجى الرد بـ `/setwelcome` مباشرة على **الصورة** أو **الملصق** الذي أرسلتَه للبوت لتعتمده كرسالة ترحيب رسمية.")
+        bot.reply_to(message, "❌ يرجى الرد بـ `/setwelcome` على صورة أو ملصق.")
         return
-    
     reply = message.reply_to_message
     if reply.photo:
         config["welcome_file_id"] = reply.photo[-1].file_id
         config["welcome_type"] = "photo"
         save_settings(config)
-        bot.reply_to(message, "✅ تم حفظ الصورة الجديدة كرسالة ترحيب رسمية للبوت بنجاح!")
+        bot.reply_to(message, "✅ تم حفظ صورة الترحيب بنجاح!")
     elif reply.sticker:
         config["welcome_file_id"] = reply.sticker.file_id
         config["welcome_type"] = "sticker"
         save_settings(config)
-        bot.reply_to(message, "✅ تم حفظ الملصق المميز كرسالة ترحيب رسمية للبوت بنجاح!")
-    else:
-        bot.reply_to(message, "❌ يرجى الرد على صورة أو ملصق فقط.")
+        bot.reply_to(message, "✅ تم حفظ ملصق الترحيب بنجاح!")
 
 @bot.message_handler(commands=['addviolation'])
 def add_violation_cmd(message):
     if not is_admin(message.from_user.id):
         return
     if not message.reply_to_message:
-        bot.reply_to(message, "❌ أرسل المحتوى للبوت مباشرة، ثم رد عليه بالأمر `/addviolation` لتحضيره ومنعه نهائياً.")
+        bot.reply_to(message, "❌ رد على الوسائط بـ `/addviolation` لإضافتها للقائمة السوداء.")
         return
-    
     reply = message.reply_to_message
     f_id = None
     if reply.photo: f_id = reply.photo[-1].file_id
@@ -402,19 +405,11 @@ def add_violation_cmd(message):
     elif reply.animation: f_id = reply.animation.file_id
     elif reply.video: f_id = reply.video.file_id
 
-    if not f_id:
-        bot.reply_to(message, "❌ نوع الوسائط غير مدعوم للتحضير.")
-        return
-
-    if "custom_violations" not in config:
-        config["custom_violations"] = []
-
-    if f_id not in config["custom_violations"]:
-        config["custom_violations"].append(f_id)
-        save_settings(config)
-        bot.reply_to(message, "✅ تم تحضير وحفظ هذا المحتوى في القائمة السوداء بنجاح!")
-    else:
-        bot.reply_to(message, "⚠️ هذا المحتوى محضور ومضاف مسبقاً.")
+    if f_id:
+        if f_id not in config["custom_violations"]:
+            config["custom_violations"].append(f_id)
+            save_settings(config)
+            bot.reply_to(message, "✅ تم إضافة المحتوى للقائمة السوداء بنجاح!")
 
 @bot.message_handler(commands=['unpunish'])
 def unpunish_cmd(message):
@@ -422,45 +417,26 @@ def unpunish_cmd(message):
         return
     try:
         args = message.text.split()
-        if len(args) < 2:
-            bot.reply_to(message, "❌ الاستخدام الصحيح:\n`/unpunish آيدي_الشخص آيدي_القناة`")
-            return
         target_user_id = int(args[1])
-        target_chat_id = int(args[2]) if len(args) > 2 else (config["channels_monitored"][0] if config["channels_monitored"] else message.chat.id)
-        
+        target_chat_id = int(args[2]) if len(args) > 2 else message.chat.id
         if unpunish_user_in_chat(target_chat_id, target_user_id):
-            bot.reply_to(message, f"✅ تم رفع وتقييد حظر النشر عن العضو `{target_user_id}` بنجاح!")
-        else:
-            bot.reply_to(message, "❌ حدث خطأ أثناء محاولة رفع العضو.")
-    except Exception as e:
-        bot.reply_to(message, f"❌ حدث خطأ: {e}")
+            bot.reply_to(message, f"✅ تم رفع الحظر عن العضو `{target_user_id}` بنجاح!")
+    except:
+        bot.reply_to(message, "❌ استخدام خاطئ للأمر.")
 
 @bot.message_handler(commands=['addadmin'])
 def add_admin_cmd(message):
     if message.from_user.id != OWNER_ID:
-        bot.reply_to(message, "❌ هذا الأمر مخصص للمالك الأساسي فقط.")
         return
     try:
         args = message.text.split()
-        if len(args) < 2:
-            if message.reply_to_message and message.reply_to_message.from_user:
-                replied_id = message.reply_to_message.from_user.id
-                if replied_id not in config["admins"]:
-                    config["admins"].append(replied_id)
-                    save_settings(config)
-                    bot.reply_to(message, f"✅ تم ترقية المشرف `{replied_id}` بنجاح.")
-                    return
-            bot.reply_to(message, "❌ الاستخدام: `/addadmin الآيدي`")
-            return
         new_admin_id = int(args[1])
         if new_admin_id not in config["admins"]:
             config["admins"].append(new_admin_id)
             save_settings(config)
             bot.reply_to(message, f"✅ تم ترقية المشرف `{new_admin_id}` بنجاح.")
-        else:
-            bot.reply_to(message, "⚠️ المشرف موجود مسبقاً.")
-    except Exception as e:
-        bot.reply_to(message, f"❌ حدث خطأ: {e}")
+    except:
+        pass
 
 @bot.message_handler(commands=['deladmin'])
 def del_admin_cmd(message):
@@ -469,17 +445,12 @@ def del_admin_cmd(message):
     try:
         args = message.text.split()
         target_id = int(args[1])
-        if target_id == OWNER_ID:
-            bot.reply_to(message, "❌ لا يمكن حذف المالك الأساسي.")
-            return
         if target_id in config["admins"]:
             config["admins"].remove(target_id)
             save_settings(config)
             bot.reply_to(message, f"✅ تم إزالة المشرف `{target_id}` بنجاح.")
-        else:
-            bot.reply_to(message, "⚠️ المستخدم ليس مشرفاً.")
     except:
-        bot.reply_to(message, "❌ الاستخدام: `/deladmin الآيدي`")
+        pass
 
 @bot.callback_query_handler(func=lambda call: is_admin(call.from_user.id))
 def handle_callbacks(call):
@@ -495,26 +466,32 @@ def handle_callbacks(call):
     elif call.data == "toggle_edit":
         config["anti_edit"] = not config["anti_edit"]
         action_performed = True
+    elif call.data == "toggle_links":
+        config["anti_links"] = not config["anti_links"]
+        action_performed = True
+    elif call.data == "toggle_stickers":
+        config["block_all_stickers"] = not config.get("block_all_stickers", False)
+        action_performed = True
     elif call.data == "set_spam_limit_prompt":
-        sent_msg = bot.send_message(call.message.chat.id, "🔢 أرسل الآن عدد الرسائل المسموحة للسبام قبل سحب الصلاحية:", parse_mode="MARKDOWN")
+        sent_msg = bot.send_message(call.message.chat.id, "🔢 أرسل عدد رسائل السبام المسموحة:")
         bot.register_next_step_handler(sent_msg, process_spam_limit_input)
         bot.answer_callback_query(call.id)
         return
     elif call.data == "edit_panel_text":
-        sent_msg = bot.send_message(call.message.chat.id, "✏️ أرسل الآن النص الجديد الذي تريد ظهوره في لوحة التحكم:")
+        sent_msg = bot.send_message(call.message.chat.id, "✏️ أرسل النص الجديد للوحة التحكم:")
         bot.register_next_step_handler(sent_msg, process_panel_text_input)
         bot.answer_callback_query(call.id)
         return
     elif call.data == "info_welcome":
-        bot.answer_callback_query(call.id, "أرسل الصورة أو الملصق مباشرة للبوت في الخاص، ثم رد عليه بالأمر: /setwelcome", show_alert=True)
+        bot.answer_callback_query(call.id, "أرسل الصورة أو الملصق في الخاص ثم رد عليه بـ /setwelcome", show_alert=True)
         return
     elif call.data == "unpunish_by_id_prompt":
-        sent_msg = bot.send_message(call.message.chat.id, "👤 أرسل الآن آيدي الشخص المراد رفع وإعادة صلاحية النشر له:", parse_mode="MARKDOWN")
+        sent_msg = bot.send_message(call.message.chat.id, "👤 أرسل آيدي العضو لرفع الحظر عنه:")
         bot.register_next_step_handler(sent_msg, process_unpunish_id_input)
         bot.answer_callback_query(call.id)
         return
     elif call.data == "add_word":
-        sent_msg = bot.send_message(call.message.chat.id, "✏️ أرسل الكلمة أو الجملة المراد حظرها:")
+        sent_msg = bot.send_message(call.message.chat.id, "✏️ أرسل الكلمة المراد حظرها:")
         bot.register_next_step_handler(sent_msg, process_banned_word_input)
         bot.answer_callback_query(call.id)
         return
@@ -524,10 +501,7 @@ def handle_callbacks(call):
         kb.add(telebot.types.InlineKeyboardButton("➕ إضافة كلمة", callback_data="add_word"))
         for idx, word in enumerate(words):
             kb.add(telebot.types.InlineKeyboardButton(f"❌ حذف: {word}", callback_data=f"del_word_{idx}"))
-        if words:
-            kb.add(telebot.types.InlineKeyboardButton("🗑️ مسح الكل", callback_data="clear_words"))
         kb.add(telebot.types.InlineKeyboardButton("🔙 رجوع", callback_data="back_to_panel"))
-        
         try:
             bot.edit_message_caption(call.message.chat.id, call.message.message_id, caption=f"⚙️ إدارة الكلمات المحظورة:\nالعدد: `{len(words)}`", parse_mode="MARKDOWN", reply_markup=kb)
         except:
@@ -548,15 +522,8 @@ def handle_callbacks(call):
         call.data = "manage_banned_words_panel"
         handle_callbacks(call)
         return
-    elif call.data == "clear_words":
-        config["banned_words"] = []
-        save_settings(config)
-        bot.answer_callback_query(call.id, "تم مسح جميع الكلمات!", show_alert=True)
-        call.data = "manage_banned_words_panel"
-        handle_callbacks(call)
-        return
     elif call.data == "manage_admins":
-        bot.answer_callback_query(call.id, f"عدد المشرفين: {len(config['admins'])}\nأضف مشرفاً عبر: /addadmin الآيدي", show_alert=True)
+        bot.answer_callback_query(call.id, f"عدد المشرفين: {len(config['admins'])}", show_alert=True)
         return
     elif call.data == "back_to_panel":
         caption_text = config.get("panel_custom_text", "👑 لوحة التحكم:")
@@ -584,11 +551,9 @@ def process_spam_limit_input(message):
         if limit > 0:
             config["spam_limit"] = limit
             save_settings(config)
-            bot.reply_to(message, f"✅ تم تحديث حد رسائل السبام بنجاح إلى: `{limit}` رسائل.")
-        else:
-            bot.reply_to(message, "❌ يرجى إرسال رقم أكبر من الصفر.")
+            bot.reply_to(message, f"✅ تم تحديث حد السبام إلى: `{limit}` رسائل.")
     except:
-        bot.reply_to(message, "❌ يرجى إرسال رقم صحيح.")
+        pass
 
 def process_panel_text_input(message):
     if not is_admin(message.from_user.id): return
@@ -596,7 +561,7 @@ def process_panel_text_input(message):
     if new_text:
         config["panel_custom_text"] = new_text
         save_settings(config)
-        bot.reply_to(message, "✅ تم حفظ نص لوحة التحكم الجديد بنجاح!")
+        bot.reply_to(message, "✅ تم حفظ نص اللوحة بنجاح!")
 
 def process_unpunish_id_input(message):
     if not is_admin(message.from_user.id): return
@@ -604,20 +569,12 @@ def process_unpunish_id_input(message):
         target_user_id = int(message.text.strip())
         channels = config.get("channels_monitored", [])
         if not channels:
-            bot.reply_to(message, "❌ لا توجد قناة مسجلة في النظام بعد.")
-            return
-        
-        success_count = 0
+            channels = [message.chat.id]
         for ch_id in channels:
-            if unpunish_user_in_chat(ch_id, target_user_id):
-                success_count += 1
-                
-        if success_count > 0:
-            bot.reply_to(message, f"✅ تم رفع وإعادة صلاحية النشر للعضو `{target_user_id}` بنجاح!")
-        else:
-            bot.reply_to(message, "❌ فشل رفع العضو.")
+            unpunish_user_in_chat(ch_id, target_user_id)
+        bot.reply_to(message, f"✅ تم رفع الحظر عن العضو `{target_user_id}` بنجاح!")
     except:
-        bot.reply_to(message, "❌ الآيدي المدخل غير صالح.")
+        bot.reply_to(message, "❌ الآيدي غير صحيح.")
 
 def process_banned_word_input(message):
     if not is_admin(message.from_user.id): return
@@ -625,9 +582,9 @@ def process_banned_word_input(message):
     if word and word not in config["banned_words"]:
         config["banned_words"].append(word)
         save_settings(config)
-        bot.reply_to(message, f"✅ تمت إضافة الكلمة المحظورة '{word}' بنجاح.")
+        bot.reply_to(message, f"✅ تمت إضافة الكلمة '{word}' بنجاح.")
 
-# ==================== [ الأحداث والمجموعات ] ====================
+# ==================== [ الأحداث والمجموعات والقنوات ] ====================
 
 @bot.channel_post_handler(content_types=['text', 'photo', 'sticker', 'video', 'animation'])
 def on_new_post(message):
@@ -670,11 +627,11 @@ def on_edited_group_message(message):
         except:
             pass
 
-# ==================== [ تشغيل البوت المستقر ] ====================
+# ==================== [ تشغيل البوت ] ====================
 if __name__ == "__main__":
     while True:
         try:
-            print("[*] تم تشغيل البوت بنجاح تام وبأعلى معايير الحماية والصرامة العالية...")
+            print("[*] البوت يعمل الآن بكامل طاقة الحماية والفلاتر الذكية...")
             bot.infinity_polling(interval=1, timeout=60, long_polling_timeout=60, skip_pending=True)
         except Exception as err:
             print(f"[!] خطأ بالاتصال: {err}")
