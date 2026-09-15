@@ -146,26 +146,37 @@ def unpunish_user_in_chat(chat_id, user_id):
         print(f"[!] خطأ رفع الصلاحية: {e}")
     return False
 
-# ==================== [ الفحص الشامل والدقيق للذكاء الاصطناعي ] ====================
-def analyze_media_bytes(file_bytes, mime_type="image/jpeg"):
+# ==================== [ الفحص الفائق والمتقدم جداً لكشف كافة المخالفات ] ====================
+def analyze_media_bytes(file_bytes):
     try:
-        encoded_string = base64.b64encode(file_bytes).decode("utf-8")
+        # معالجة وتوحيد الصيغة إلى JPEG قياسي نقي عبر مكتبة PIL لتجاوز قيود الملصقات الـ WebP أو الصور المتحركة
+        image = Image.open(io.BytesIO(file_bytes))
+        if image.mode in ("RGBA", "P"):
+            image = image.convert("RGB")
+        
+        output_io = io.BytesIO()
+        image.save(output_io, format="JPEG", quality=95)
+        processed_bytes = output_io.getvalue()
+        
+        encoded_string = base64.b64encode(processed_bytes).decode("utf-8")
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
         
-        # توجيه ذكي وشامل يكشف الإباحية المخفية في الأطراف أو الزوايا أو داخل الملصقات والفيديوهات والGIF
+        # توجيه مكثف وصارم جداً يغطي استغلال الأطفال، الإباحية الصريحة، والأجزاء المخفية في الأطراف والزوايا
         prompt = (
-            "You are an expert visual moderation AI. Carefully inspect this image, sticker frame, animation frame, or video frame across its entire area — including the edges, corners, background, and center. "
-            "Does it contain ANY form of explicit pornography, adult sexual acts, exposed human genitals, explicit erotic content, or child sexual abuse material (CSAM)? "
-            "Note: Small hidden explicit images in corners, cropped explicit parts, or explicit elements embedded inside stickers or GIFs MUST be detected. "
-            "If ANY explicit pornographic content is present anywhere in the media, reply strictly with 'true'. "
-            "If the media is completely safe, normal, regular selfies, regular stickers, landscapes, memes, anime without explicit content, or standard artwork, reply strictly with 'false'."
+            "You are a strict zero-tolerance content moderation AI. Analyze this image frame thoroughly across its absolute entire area, including edges, corners, background, and center. "
+            "You MUST detect and flag ANY form of: "
+            "1. Child sexual abuse material (CSAM) or any explicit/inappropriate imagery involving minors or children under any circumstance. "
+            "2. Explicit pornography, adult sexual acts, exposed human genitals, or explicit erotic content. "
+            "3. Hidden explicit images, cropped elements, or explicit content embedded inside stickers, memes, or graphics (even if placed on borders or corners). "
+            "If ANY of these violations exist anywhere in the image, reply strictly with 'true'. "
+            "If the media is completely safe, normal, standard artwork, regular stickers, or safe content, reply strictly with 'false'."
         )
         
         payload = {
             "contents": [{
                 "parts": [
                     {"text": prompt},
-                    {"inlineData": {"mimeType": mime_type, "data": encoded_string}}
+                    {"inlineData": {"mimeType": "image/jpeg", "data": encoded_string}}
                 ]
             }]
         }
@@ -175,8 +186,8 @@ def analyze_media_bytes(file_bytes, mime_type="image/jpeg"):
             raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"].strip().lower()
             if "true" in raw_text:
                 return True
-    except:
-        pass
+    except Exception as e:
+        print(f"[!] خطأ في المعالجة البصرية: {e}")
     return False
 
 def process_channel_message(message):
@@ -187,7 +198,6 @@ def process_channel_message(message):
     chat_id = message.chat.id
     message_id = message.message_id
     file_id = None
-    mime_type = "image/jpeg"
     media_type_name = "صورة/وسائط"
     
     if message.photo:
@@ -195,15 +205,12 @@ def process_channel_message(message):
         media_type_name = "🖼️ صورة"
     elif message.sticker:
         file_id = message.sticker.file_id
-        mime_type = "image/webp"
         media_type_name = "🎭 ملصق"
     elif message.animation:
         file_id = message.animation.file_id
-        mime_type = "video/mp4"
         media_type_name = "🎬 متحركة GIF"
     elif message.video:
         file_id = message.video.file_id
-        mime_type = "video/mp4"
         media_type_name = "🎥 فيديو"
 
     if not file_id:
@@ -232,7 +239,7 @@ def process_channel_message(message):
             pass
         return
 
-    # فحص الوسائط عبر الذكاء الاصطناعي مع دعم الـ GIF والفيديوهات والملصقات بدقة
+    # فحص الوسائط عبر النظام البصري المحسّن
     try:
         file_info = bot.get_file(file_id)
         downloaded_file = bot.download_file(file_info.file_path)
@@ -240,13 +247,25 @@ def process_channel_message(message):
         is_violating = False
         
         if message.video or message.animation:
-            # بالنسبة للفيديوهات والصور المتحركة، نقوم بأخذ عينة من ملف الفيديو وفحصها لضمان كشف المخالفة بغض النظر عن موقعها
-            sample_bytes = downloaded_file[:1000000] if len(downloaded_file) > 1000000 else downloaded_file
-            if analyze_media_bytes(sample_bytes, mime_type="video/mp4"):
+            # للفيديوهات والـ GIF: تقسيم العينات وفحص مقاطع متعددة لضمان كشف أي لقطة مخالفة
+            file_len = len(downloaded_file)
+            chunk_size = 1000000  # 1MB
+            
+            # فحص البداية
+            if analyze_media_bytes(downloaded_file[:chunk_size]):
                 is_violating = True
+            # فحص المنتصف
+            elif file_len > chunk_size * 2:
+                mid_point = file_len // 2
+                if analyze_media_bytes(downloaded_file[mid_point:mid_point+chunk_size]):
+                    is_violating = True
+            # فحص النهاية
+            elif file_len > chunk_size:
+                if analyze_media_bytes(downloaded_file[-chunk_size:]):
+                    is_violating = True
         else:
-            # للصور والملصقات (Stickers / Photos)
-            if analyze_media_bytes(downloaded_file, mime_type=mime_type):
+            # للصور والملصقات (Stickers / Photos) بجميع أنواعها
+            if analyze_media_bytes(downloaded_file):
                 is_violating = True
 
         if is_violating:
@@ -258,7 +277,7 @@ def process_channel_message(message):
             try:
                 bot.delete_message(chat_id, message_id)
                 alert_text = (
-                    f"🚫 <b>تم حذف محتوى إباحي مخالف بالذكاء الاصطناعي</b>\n\n"
+                    f"🚫 <b>تم حذف محتوى إباحي/مخالف بالذكاء الاصطناعي</b>\n\n"
                     f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
                     f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
                     f"🏷️ <b>نوع المحتوى:</b> {media_type_name}\n"
