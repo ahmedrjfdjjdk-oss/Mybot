@@ -51,7 +51,7 @@ def load_settings():
                     "total_deleted": 0,
                     "channels_monitored": [],
                     "custom_violations": [],
-                    "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بدقة عالية لحذف المحتوى الإباحي والسبام فقط.",
+                    "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بدقة فائقة لحذف الإباحية الصريحة والسبام فقط.",
                     "welcome_file_id": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop",
                     "welcome_type": "photo"
                 }
@@ -73,7 +73,7 @@ def load_settings():
         "total_deleted": 0,
         "channels_monitored": [],
         "custom_violations": [],
-        "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بدقة عالية لحذف المحتوى الإباحي والسبام فقط.",
+        "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بدقة فائقة لحذف الإباحية الصريحة والسبام فقط.",
         "welcome_file_id": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop",
         "welcome_type": "photo"
     }
@@ -149,7 +149,7 @@ def unpunish_user_in_chat(chat_id, user_id):
         print(f"[!] خطأ رفع الصلاحية: {e}")
     return False
 
-# ==================== [ فحص الذكاء الاصطناعي (دقيق للصور المخالفة حصراً) ] ====================
+# ==================== [ فحص الذكاء الاصطناعي (مرتكز حصراً على الإباحية الصريحة) ] ====================
 def normalize_image(file_bytes):
     try:
         img = Image.open(io.BytesIO(file_bytes))
@@ -167,12 +167,12 @@ def analyze_media(file_bytes, mime_type="image/jpeg"):
         encoded_string = base64.b64encode(file_bytes).decode("utf-8")
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
         
-        # توجيه دقيق يضمن عدم حذف الصور الطبيعية والعادية، ويركز فقط على الإباحي الفاضح واستغلال الأطفال
+        # توجيه دقيق جداً يمنع الأخطاء: يركز فقط على الأفعال الإباحية الصريحة والعري الجنسي الواضح
         prompt = (
-            "You are a strict content moderation AI. Look at this image. "
-            "Does it contain explicit pornography, hardcore adult sexual acts, explicit genital exposure, or child sexual abuse material (CSAM)? "
-            "Answer strictly with 'true' ONLY if it contains explicit pornography or explicit adult/child exploitation content. "
-            "If it is an ordinary photo, selfie, normal artwork, anime, sticker, meme, landscape, or anything else safe and non-pornographic, you MUST answer with 'false'."
+            "Analyze this image carefully. Does it contain hardcore explicit pornography, explicit sexual intercourse acts, "
+            "direct exposure of human genitals, or child sexual abuse material (CSAM)? "
+            "Answer with 'true' ONLY if it is unambiguously and explicitly pornographic or adult sexual content. "
+            "If it is a normal photo, regular selfie, clothed person, artistic image, anime, cartoon, meme, sticker, or any safe content, you MUST answer with 'false'."
         )
         
         payload = {
@@ -213,9 +213,11 @@ def process_channel_message(message):
         media_type_name = "🎭 ملصق"
     elif message.animation:
         file_id = message.animation.file_id
+        mime_type = "image/mp4"
         media_type_name = "🎬 متحركة GIF"
     elif message.video:
         file_id = message.video.file_id
+        mime_type = "video/mp4"
         media_type_name = "🎥 فيديو"
 
     if not file_id:
@@ -226,7 +228,7 @@ def process_channel_message(message):
     config["total_scanned"] += 1
     save_settings(config)
 
-    # إذا كانت القائمة السوداء اليدوية تحتوي عليه، احذفه فوراً
+    # إذا كانت محددة في القائمة السوداء اليدوية
     if is_custom_violated:
         config["total_deleted"] += 1
         save_settings(config)
@@ -244,12 +246,17 @@ def process_channel_message(message):
             pass
         return
 
-    # فحص الوسائط عبر الذكاء الاصطناعي (الفيديوهات والملصقات غير الداعمة للتحميل المباشر يتم تخطيها بأمان لكي لا تحذف العادية)
+    # فحص الوسائط بالذكاء الاصطناعي (للصور، الملصقات، والتحويلات المتاحة)
     try:
-        if message.photo or message.sticker or message.animation:
+        if message.photo or message.sticker or message.animation or message.video:
             file_info = bot.get_file(file_id)
             downloaded_file = bot.download_file(file_info.file_path)
-            processed_file = normalize_image(downloaded_file)
+            
+            # إذا كان فيديو أو متحركة طويلة نتخطي التطبيع العنيف لكي لا يتأثر، أما الصور والملصقات فنطبعها
+            if message.video:
+                processed_file = downloaded_file[:500000] # فحص أول جزء من الفيديو للحفاظ على السرعة
+            else:
+                processed_file = normalize_image(downloaded_file)
             
             if analyze_media(processed_file, mime_type=mime_type):
                 config["total_deleted"] += 1
@@ -260,7 +267,7 @@ def process_channel_message(message):
                 try:
                     bot.delete_message(chat_id, message_id)
                     alert_text = (
-                        f"🚫 <b>تم حذف محتوى إباحي أو مخالف بالذكاء الاصطناعي</b>\n\n"
+                        f"🚫 <b>تم حذف محتوى إباحي صريح بالذكاء الاصطناعي</b>\n\n"
                         f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
                         f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
                         f"🏷️ <b>نوع المحتوى:</b> {media_type_name}\n"
@@ -313,7 +320,6 @@ def check_message_text_and_spam(message):
         user_messages[sender_id].append(current_time)
         user_messages[sender_id] = [t for t in user_messages[sender_id] if current_time - t < config["spam_window"]]
 
-        # إذا تجاوز الشخص عدد رسائل السبام المحددة في لوحة التحكم، يتم حذف رسالته وسحب الصلاحية
         if len(user_messages[sender_id]) > config["spam_limit"]:
             try:
                 bot.delete_message(chat_id, message_id)
@@ -416,7 +422,7 @@ def add_violation_cmd(message):
     if not is_admin(message.from_user.id):
         return
     if not message.reply_to_message:
-        bot.reply_to(message, "❌ أرسل المحتوى (صورة/فيديو/ملصق) للبوت مباشرة، ثم رد عليه بالأمر `/addviolation` لتحضيره ومنعه نهائياً.")
+        bot.reply_to(message, "❌ أرسل المحتوى للبوت مباشرة، ثم رد عليه بالأمر `/addviolation` لتحضيره ومنعه نهائياً.")
         return
     
     reply = message.reply_to_message
@@ -436,7 +442,7 @@ def add_violation_cmd(message):
     if f_id not in config["custom_violations"]:
         config["custom_violations"].append(f_id)
         save_settings(config)
-        bot.reply_to(message, "✅ تم تحضير وحفظ هذا المحتوى في القائمة السوداء بنجاح! سيتم حذفه فوراً لو تم نشره.")
+        bot.reply_to(message, "✅ تم تحضير وحفظ هذا المحتوى في القائمة السوداء بنجاح!")
     else:
         bot.reply_to(message, "⚠️ هذا المحتوى محضور ومضاف مسبقاً.")
 
@@ -447,15 +453,15 @@ def unpunish_cmd(message):
     try:
         args = message.text.split()
         if len(args) < 2:
-            bot.reply_to(message, "❌ الاستخدام الصحيح:\n`/unpunish آيدي_الشخص آيدي_القناة`\nأو يمكنك استخدام زر لوحة التحكم.")
+            bot.reply_to(message, "❌ الاستخدام الصحيح:\n`/unpunish آيدي_الشخص آيدي_القناة`")
             return
         target_user_id = int(args[1])
         target_chat_id = int(args[2]) if len(args) > 2 else (config["channels_monitored"][0] if config["channels_monitored"] else message.chat.id)
         
         if unpunish_user_in_chat(target_chat_id, target_user_id):
-            bot.reply_to(message, f"✅ تم رفع وتقييد حظر النشر عن العضو `{target_user_id}` في القناة بنجاح!")
+            bot.reply_to(message, f"✅ تم رفع وتقييد حظر النشر عن العضو `{target_user_id}` بنجاح!")
         else:
-            bot.reply_to(message, "❌ حدث خطأ أثناء محاولة رفع العضو. تأكد من آيدي القناة وصلاحيات البوت.")
+            bot.reply_to(message, "❌ حدث خطأ أثناء محاولة رفع العضو.")
     except Exception as e:
         bot.reply_to(message, f"❌ حدث خطأ: {e}")
 
@@ -472,9 +478,9 @@ def add_admin_cmd(message):
                 if replied_id not in config["admins"]:
                     config["admins"].append(replied_id)
                     save_settings(config)
-                    bot.reply_to(message, f"✅ تم ترقية المشرف `{replied_id}` بنجاح عبر الرد.")
+                    bot.reply_to(message, f"✅ تم ترقية المشرف `{replied_id}` بنجاح.")
                     return
-            bot.reply_to(message, "❌ الاستخدام: `/addadmin الآيدي` أو الرد على رسالة الشخص بـ `/addadmin`")
+            bot.reply_to(message, "❌ الاستخدام: `/addadmin الآيدي`")
             return
         new_admin_id = int(args[1])
         if new_admin_id not in config["admins"]:
@@ -533,7 +539,7 @@ def handle_callbacks(call):
         bot.answer_callback_query(call.id, "أرسل الصورة أو الملصق مباشرة للبوت في الخاص، ثم رد عليه بالأمر: /setwelcome", show_alert=True)
         return
     elif call.data == "unpunish_by_id_prompt":
-        sent_msg = bot.send_message(call.message.chat.id, "👤 أرسل الآن آيدي الشخص المراد رفع وإعادة صلاحية النشر له في القناة (مثال: `123456789`):", parse_mode="MARKDOWN")
+        sent_msg = bot.send_message(call.message.chat.id, "👤 أرسل الآن آيدي الشخص المراد رفع وإعادة صلاحية النشر له في القناة:", parse_mode="MARKDOWN")
         bot.register_next_step_handler(sent_msg, process_unpunish_id_input)
         bot.answer_callback_query(call.id)
         return
@@ -628,7 +634,7 @@ def process_unpunish_id_input(message):
         target_user_id = int(message.text.strip())
         channels = config.get("channels_monitored", [])
         if not channels:
-            bot.reply_to(message, "❌ لا توجد قناة مسجلة في النظام بعد. قم بنشر رسالة من القناة أولاً.")
+            bot.reply_to(message, "❌ لا توجد قناة مسجلة في النظام بعد.")
             return
         
         success_count = 0
@@ -637,11 +643,11 @@ def process_unpunish_id_input(message):
                 success_count += 1
                 
         if success_count > 0:
-            bot.reply_to(message, f"✅ تم رفع وإعادة صلاحية النشر للعضو `{target_user_id}` في جميع القنوات المرتبطة بنجاح!")
+            bot.reply_to(message, f"✅ تم رفع وإعادة صلاحية النشر للعضو `{target_user_id}` بنجاح!")
         else:
-            bot.reply_to(message, "❌ فشل رفع العضو. تأكد أن آيدي الشخص صحيح وأن البوت مشرف بصلاحيات كاملة.")
+            bot.reply_to(message, "❌ فشل رفع العضو.")
     except Exception as e:
-        bot.reply_to(message, "❌ الآيدي المدخل غير صالح. يرجى إرسال رقم الآيدي صحيحاً.")
+        bot.reply_to(message, "❌ الآيدي المدخل غير صالح.")
 
 def process_banned_word_input(message):
     if not is_admin(message.from_user.id): return
