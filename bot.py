@@ -5,12 +5,9 @@ import telebot
 import requests
 import base64
 import json
-import cv2
-import numpy as np
 import os
 import sys
 import time
-from threading import Thread
 from PIL import Image
 import io
 
@@ -51,7 +48,7 @@ def load_settings():
                     "total_deleted": 0,
                     "channels_monitored": [],
                     "custom_violations": [],
-                    "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بدقة فائقة لحذف الإباحية الصريحة والسبام فقط.",
+                    "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بفحص ذكي وشامل لكافة الوسائط والملصقات بدقة فائقة.",
                     "welcome_file_id": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop",
                     "welcome_type": "photo"
                 }
@@ -73,7 +70,7 @@ def load_settings():
         "total_deleted": 0,
         "channels_monitored": [],
         "custom_violations": [],
-        "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بدقة فائقة لحذف الإباحية الصريحة والسبام فقط.",
+        "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بفحص ذكي وشامل لكافة الوسائط والملصقات بدقة فائقة.",
         "welcome_file_id": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop",
         "welcome_type": "photo"
     }
@@ -83,7 +80,7 @@ def save_settings(settings):
         json.dump(settings, f, indent=4)
 
 config = load_settings()
-print("[-] تم تشغيل النظام الذكي المحدث بنجاح...")
+print("[-] تم تشغيل النظام الذكي المحدث كلياً بنجاح...")
 
 def is_admin(user_id):
     return user_id == OWNER_ID or user_id in config.get("admins", [])
@@ -149,30 +146,19 @@ def unpunish_user_in_chat(chat_id, user_id):
         print(f"[!] خطأ رفع الصلاحية: {e}")
     return False
 
-# ==================== [ فحص الذكاء الاصطناعي (مرتكز حصراً على الإباحية الصريحة) ] ====================
-def normalize_image(file_bytes):
-    try:
-        img = Image.open(io.BytesIO(file_bytes))
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        img = img.resize((512, 512), Image.Resampling.LANCZOS)
-        output = io.BytesIO()
-        img.save(output, format="JPEG", quality=90)
-        return output.getvalue()
-    except:
-        return file_bytes
-
-def analyze_media(file_bytes, mime_type="image/jpeg"):
+# ==================== [ الفحص الشامل والدقيق للذكاء الاصطناعي ] ====================
+def analyze_media_bytes(file_bytes, mime_type="image/jpeg"):
     try:
         encoded_string = base64.b64encode(file_bytes).decode("utf-8")
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
         
-        # توجيه دقيق جداً يمنع الأخطاء: يركز فقط على الأفعال الإباحية الصريحة والعري الجنسي الواضح
+        # توجيه ذكي وشامل يكشف الإباحية المخفية في الأطراف أو الزوايا أو داخل الملصقات والفيديوهات والGIF
         prompt = (
-            "Analyze this image carefully. Does it contain hardcore explicit pornography, explicit sexual intercourse acts, "
-            "direct exposure of human genitals, or child sexual abuse material (CSAM)? "
-            "Answer with 'true' ONLY if it is unambiguously and explicitly pornographic or adult sexual content. "
-            "If it is a normal photo, regular selfie, clothed person, artistic image, anime, cartoon, meme, sticker, or any safe content, you MUST answer with 'false'."
+            "You are an expert visual moderation AI. Carefully inspect this image, sticker frame, animation frame, or video frame across its entire area — including the edges, corners, background, and center. "
+            "Does it contain ANY form of explicit pornography, adult sexual acts, exposed human genitals, explicit erotic content, or child sexual abuse material (CSAM)? "
+            "Note: Small hidden explicit images in corners, cropped explicit parts, or explicit elements embedded inside stickers or GIFs MUST be detected. "
+            "If ANY explicit pornographic content is present anywhere in the media, reply strictly with 'true'. "
+            "If the media is completely safe, normal, regular selfies, regular stickers, landscapes, memes, anime without explicit content, or standard artwork, reply strictly with 'false'."
         )
         
         payload = {
@@ -213,7 +199,7 @@ def process_channel_message(message):
         media_type_name = "🎭 ملصق"
     elif message.animation:
         file_id = message.animation.file_id
-        mime_type = "image/mp4"
+        mime_type = "video/mp4"
         media_type_name = "🎬 متحركة GIF"
     elif message.video:
         file_id = message.video.file_id
@@ -228,7 +214,7 @@ def process_channel_message(message):
     config["total_scanned"] += 1
     save_settings(config)
 
-    # إذا كانت محددة في القائمة السوداء اليدوية
+    # التحقق من القائمة السوداء اليدوية
     if is_custom_violated:
         config["total_deleted"] += 1
         save_settings(config)
@@ -246,36 +232,41 @@ def process_channel_message(message):
             pass
         return
 
-    # فحص الوسائط بالذكاء الاصطناعي (للصور، الملصقات، والتحويلات المتاحة)
+    # فحص الوسائط عبر الذكاء الاصطناعي مع دعم الـ GIF والفيديوهات والملصقات بدقة
     try:
-        if message.photo or message.sticker or message.animation or message.video:
-            file_info = bot.get_file(file_id)
-            downloaded_file = bot.download_file(file_info.file_path)
+        file_info = bot.get_file(file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        
+        is_violating = False
+        
+        if message.video or message.animation:
+            # بالنسبة للفيديوهات والصور المتحركة، نقوم بأخذ عينة من ملف الفيديو وفحصها لضمان كشف المخالفة بغض النظر عن موقعها
+            sample_bytes = downloaded_file[:1000000] if len(downloaded_file) > 1000000 else downloaded_file
+            if analyze_media_bytes(sample_bytes, mime_type="video/mp4"):
+                is_violating = True
+        else:
+            # للصور والملصقات (Stickers / Photos)
+            if analyze_media_bytes(downloaded_file, mime_type=mime_type):
+                is_violating = True
+
+        if is_violating:
+            config["total_deleted"] += 1
+            save_settings(config)
             
-            # إذا كان فيديو أو متحركة طويلة نتخطي التطبيع العنيف لكي لا يتأثر، أما الصور والملصقات فنطبعها
-            if message.video:
-                processed_file = downloaded_file[:500000] # فحص أول جزء من الفيديو للحفاظ على السرعة
-            else:
-                processed_file = normalize_image(downloaded_file)
+            chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
             
-            if analyze_media(processed_file, mime_type=mime_type):
-                config["total_deleted"] += 1
-                save_settings(config)
-                
-                chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
-                
-                try:
-                    bot.delete_message(chat_id, message_id)
-                    alert_text = (
-                        f"🚫 <b>تم حذف محتوى إباحي صريح بالذكاء الاصطناعي</b>\n\n"
-                        f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
-                        f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
-                        f"🏷️ <b>نوع المحتوى:</b> {media_type_name}\n"
-                        f"📊 <b>إجمالي المحذوفات:</b> {config['total_deleted']}"
-                    )
-                    notify_admins(alert_text)
-                except:
-                    pass
+            try:
+                bot.delete_message(chat_id, message_id)
+                alert_text = (
+                    f"🚫 <b>تم حذف محتوى إباحي مخالف بالذكاء الاصطناعي</b>\n\n"
+                    f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
+                    f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
+                    f"🏷️ <b>نوع المحتوى:</b> {media_type_name}\n"
+                    f"📊 <b>إجمالي المحذوفات:</b> {config['total_deleted']}"
+                )
+                notify_admins(alert_text)
+            except:
+                pass
     except:
         pass
 
@@ -285,7 +276,7 @@ def check_message_text_and_spam(message):
     message_id = message.message_id
     message_text = message.text or message.caption or ""
 
-    # 1. فحص الكلمات المحظورة
+    # 1. فحص الكلمات المحظورة وحذفها وسحب الصلاحية
     if message_text:
         for word in config["banned_words"]:
             if word.lower() in message_text.lower():
@@ -309,7 +300,7 @@ def check_message_text_and_spam(message):
                 except:
                     return True
 
-    # 2. فحص ومنع السبام
+    # 2. فحص ومنع السبام (حذف رسائل السبام وسحب الصلاحية عند تجاوز الحد)
     if config["anti_spam"]:
         sender_id = message.from_user.id if message.from_user else chat_id
         current_time = time.time()
@@ -326,7 +317,7 @@ def check_message_text_and_spam(message):
                 chat_name, chat_username, name, username, user_id = get_user_and_chat_info(message)
                 punished_status = ""
                 if punish_user_only(chat_id, user_id):
-                    punished_status = f"\n⚖️ <b>الإجراء:</b> تم سحب صلاحية النشر لتجاوز الحد ({config['spam_limit']} رسائل)!"
+                    punished_status = f"\n⚖️ <b>الإجراء:</b> تم سحب صلاحية النشر لتجاوز حد السبام ({config['spam_limit']} رسائل)!"
 
                 alert_text = (
                     f"⚠️ <b>رصد وتجاوز حد السبام وحذف الرسالة</b>\n\n"
@@ -539,7 +530,7 @@ def handle_callbacks(call):
         bot.answer_callback_query(call.id, "أرسل الصورة أو الملصق مباشرة للبوت في الخاص، ثم رد عليه بالأمر: /setwelcome", show_alert=True)
         return
     elif call.data == "unpunish_by_id_prompt":
-        sent_msg = bot.send_message(call.message.chat.id, "👤 أرسل الآن آيدي الشخص المراد رفع وإعادة صلاحية النشر له في القناة:", parse_mode="MARKDOWN")
+        sent_msg = bot.send_message(call.message.chat.id, "👤 أرسل الآن آيدي الشخص المراد رفع وإعادة صلاحية النشر له:", parse_mode="MARKDOWN")
         bot.register_next_step_handler(sent_msg, process_unpunish_id_input)
         bot.answer_callback_query(call.id)
         return
