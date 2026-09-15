@@ -53,7 +53,7 @@ def load_settings():
                     "custom_violations": [],
                     "panel_custom_text": "👑 أهلاً بك في لوحة التحكم الفولاذية:\n\n⚡ النظام يعمل بأقصى درجات التركيز لحذف المحتوى الإباحي بدقة مطلقة.",
                     "welcome_file_id": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop",
-                    "welcome_type": "photo" # photo أو sticker
+                    "welcome_type": "photo"
                 }
                 for k, v in default_keys.items():
                     if k not in data:
@@ -149,7 +149,7 @@ def unpunish_user_in_chat(chat_id, user_id):
         print(f"[!] خطأ رفع الصلاحية: {e}")
     return False
 
-# ==================== [ فحص الذكاء الاصطناعي (تركيز مكثف على الإباحية) ] ====================
+# ==================== [ فحص الذكاء الاصطناعي (أقصى درجات الحماية والصرامة المطلقة) ] ====================
 def normalize_image(file_bytes):
     try:
         img = Image.open(io.BytesIO(file_bytes))
@@ -174,7 +174,7 @@ def local_backup_scan(file_bytes):
         mask = cv2.inRange(img_ycrcb, np.array([0, 133, 77]), np.array([255, 177, 127]))
         explicit_pixels = cv2.countNonZero(mask)
         ratio = (explicit_pixels / total_pixels) * 100
-        if ratio > 40.0:
+        if ratio > 35.0:
             return True
     except:
         pass
@@ -185,14 +185,15 @@ def analyze_media(file_bytes, mime_type="image/jpeg"):
         encoded_string = base64.b64encode(file_bytes).decode("utf-8")
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
         
+        # [تعديل صارم جداً لحذف أي محتوى إباحي أو استغلالي بدون استثناء]
         prompt = (
-            "You are an extreme, highly focused AI content moderation expert designed specifically to detect pornography and adult explicit content. "
-            "Analyze this media image meticulously. Does it contain ANY form of pornography, explicit sexual acts, full or partial nudity, "
-            "suggestive adult poses, lingerie intended for adult content, or explicit sexual organs? "
-            "If it contains ANY explicit or hardcore pornographic material, you MUST reply with 'true'. "
-            "If the image is an ordinary photo, selfie, landscape, cartoon, meme, or completely safe family-friendly image, reply 'false'. "
-            "Focus strongly and strictly on purging pornographic content without compromise."
+            "You are an absolute, zero-tolerance AI safety and child protection moderation expert. "
+            "Examine this image with extreme scrutiny. Does it contain ANY form of pornography, adult explicit content, "
+            "nudity, partial nudity, suggestive poses, lingerie, or ANY form of child sexual abuse material (CSAM) or child exploitation? "
+            "If there is even the slightest hint, suggestion, or explicit content of any kind, you MUST reply with 'true'. "
+            "If and only if the image is 100% completely safe, ordinary, and innocent, reply 'false'. Be extremely strict."
         )
+        
         payload = {
             "contents": [{
                 "parts": [
@@ -259,7 +260,7 @@ def process_channel_message(message):
             try:
                 bot.delete_message(chat_id, message_id)
                 alert_text = (
-                    f"🚫 <b>تم حذف محتوى إباحي (بدون سحب صلاحية النشر)</b>\n\n"
+                    f"🚫 <b>تم حذف محتوى إباحي أو مخالف فوراً</b>\n\n"
                     f"📌 <b>المكان:</b> {chat_name} ({chat_username})\n"
                     f"👤 <b>اسم الشخص:</b> {name} (<code>{user_id}</code>)\n"
                     f"🏷️ <b>نوع المحتوى:</b> {media_type_name}\n"
